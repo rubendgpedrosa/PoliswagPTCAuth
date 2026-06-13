@@ -1,0 +1,21 @@
+node_modules/
+*.log
+.env
+smoke.json
+*.crt
+*.key
+*.pem
+*.tar.gz
+*.zip
+dist/
+poliswag-passport
+poliswag-passport.exe
+server/poliswag-passport
+server/poliswag-passport.exe
+
+# OS/editor noise
+.DS_Store
+.vscode/
+
+# Local TLS material for the wss listener — never commit private keys
+server/certs/

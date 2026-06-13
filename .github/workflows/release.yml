@@ -1,0 +1,131 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-server:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: poliswag-passport-linux-amd64
+            goos: linux
+            goarch: amd64
+            binary: poliswag-passport
+            archive: tar.gz
+          - name: poliswag-passport-linux-arm64
+            goos: linux
+            goarch: arm64
+            binary: poliswag-passport
+            archive: tar.gz
+          - name: poliswag-passport-windows-amd64
+            goos: windows
+            goarch: amd64
+            binary: poliswag-passport.exe
+            archive: zip
+          - name: poliswag-passport-macos-amd64
+            goos: darwin
+            goarch: amd64
+            binary: poliswag-passport
+            archive: tar.gz
+          - name: poliswag-passport-macos-arm64
+            goos: darwin
+            goarch: arm64
+            binary: poliswag-passport
+            archive: tar.gz
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache-dependency-path: server/go.sum
+
+      - name: Test server
+        run: go test ./...
+        working-directory: server
+
+      - name: Build Poliswag Passport
+        run: |
+          mkdir -p ../dist
+          CGO_ENABLED=0 GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} \
+            go build -trimpath -ldflags="-s -w" -o ../dist/${{ matrix.binary }} .
+        working-directory: server
+
+      - name: Package Poliswag Passport
+        run: |
+          cd dist
+          if [ "${{ matrix.archive }}" = "zip" ]; then
+            zip "${{ matrix.name }}.zip" "${{ matrix.binary }}"
+          else
+            tar -czf "${{ matrix.name }}.tar.gz" "${{ matrix.binary }}"
+          fi
+
+      - name: Upload Poliswag Passport artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: dist/${{ matrix.name }}.${{ matrix.archive }}
+          if-no-files-found: error
+
+  package-extension:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Test extension logic
+        run: node --test --test-force-exit test/*.js
+        working-directory: extension
+
+      - name: Package extension
+        run: |
+          mkdir -p dist
+          zip -r dist/poliswag-passport-extension.zip extension \
+            -x 'extension/test/*'
+
+      - name: Upload extension artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: poliswag-passport-extension
+          path: dist/poliswag-passport-extension.zip
+          if-no-files-found: error
+
+  github-release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs:
+      - build-server
+      - package-extension
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --title "$GITHUB_REF_NAME" \
+            --notes "Download the extension zip and the Poliswag Passport binary for your operating system."
