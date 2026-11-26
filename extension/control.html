@@ -217,12 +217,55 @@
         color: var(--muted);
         padding: 18px 14px;
       }
+      .settings {
+        margin-bottom: 16px;
+      }
+      .settings form {
+        display: grid;
+        grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto;
+        align-items: end;
+        gap: 12px;
+        padding: 12px 14px;
+      }
+      .settings label {
+        display: grid;
+        gap: 4px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .settings input {
+        font: inherit;
+        color: var(--text);
+        background: var(--bg);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 6px 8px;
+        min-width: 0;
+      }
+      .settings .btn {
+        font-size: 13px;
+        padding: 6px 14px;
+      }
+      .settings-foot {
+        padding: 0 14px 12px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .settings-foot code {
+        font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      }
+      .settings-warning {
+        color: var(--warn);
+        padding: 0 14px 12px;
+        font-size: 13px;
+      }
       @media (max-width: 780px) {
         main { padding: 16px; }
         header,
         .warning,
         .layout { grid-template-columns: 1fr; display: grid; }
         .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .settings form { grid-template-columns: 1fr; }
         .warning code { white-space: normal; }
       }
     </style>
@@ -247,6 +290,31 @@
           <div id="serverWarningHint" class="hint"></div>
         </div>
         <code id="startCommand">./poliswag-passport</code>
+      </section>
+
+      <section id="permissionsWarning" class="warning" role="alert" hidden>
+        <div>
+          <strong>Host permissions required</strong>
+          <span>Grant site access so Poliswag Passport can automate PTC logins and connect to the local helper.</span>
+        </div>
+        <button id="grantPermissions" class="btn" type="button">Grant permissions</button>
+      </section>
+
+      <section class="panel settings" aria-label="Helper settings">
+        <h2>Helper</h2>
+        <form id="helperForm" autocomplete="off">
+          <label>Helper URL
+            <input id="helperUrlInput" type="text" spellcheck="false" placeholder="empty = local helper (127.0.0.1)" />
+          </label>
+          <label>Worker token
+            <input id="workerTokenInput" type="password" autocomplete="off" spellcheck="false" placeholder="only for a remote helper" />
+          </label>
+          <button class="btn" type="submit">Save</button>
+        </form>
+        <div id="helperSettingsWarning" class="settings-warning" role="alert" hidden></div>
+        <div class="settings-foot">
+          e.g. <code>ws://192.168.1.10:5090</code> or <code>wss://passport.example.com/ws</code> · worker ID <code id="workerId"></code> <span id="helperSettingsMsg"></span>
+        </div>
       </section>
 
       <section class="grid" aria-label="Session statistics">
@@ -280,6 +348,7 @@
       </section>
     </main>
     <script src="lib/pageLogic.js"></script>
+    <script src="lib/helperUrl.js"></script>
     <script src="control.js"></script>
   </body>
 </html>

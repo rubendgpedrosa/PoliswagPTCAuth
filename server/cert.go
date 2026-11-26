@@ -53,7 +53,7 @@ func runCertSetup(cfg Config, force bool, logger *log.Logger) (certFiles, error)
 
 func ensureCert(stateDir string, force bool, logger *log.Logger) (certFiles, bool, error) {
 	files := certPaths(stateDir)
-	if !force && fileExists(files.caCert) && fileExists(files.serverKey) && fileExists(files.serverCrt) {
+	if !force && fileExists(files.caCert) && fileExists(files.serverKey) && certStillValid(files.serverCrt) {
 		return files, false, nil
 	}
 
@@ -115,6 +115,25 @@ func ensureCert(stateDir string, force bool, logger *log.Logger) (certFiles, boo
 		logger.Printf("generated local TLS cert: %s", files.serverCrt)
 	}
 	return files, true, nil
+}
+
+// certStillValid reports whether the server cert parses and is valid for at least
+// another 30 days, so an expired or corrupt cert is replaced instead of silently
+// breaking wss.
+func certStillValid(path string) bool {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	block, _ := pem.Decode(data)
+	if block == nil {
+		return false
+	}
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return false
+	}
+	return time.Now().Add(30 * 24 * time.Hour).Before(cert.NotAfter)
 }
 
 func writePEM(path, typ string, bytes []byte, perm os.FileMode) error {
@@ -209,7 +228,12 @@ func firefoxProfileRoots() []string {
 	default:
 		roots = append(roots,
 			filepath.Join(home, ".mozilla", "firefox"),
+			filepath.Join(home, ".config", "mozilla", "firefox"),
+			filepath.Join(home, "snap", "firefox", "common", ".mozilla", "firefox"),
+			filepath.Join(home, ".var", "app", "org.mozilla.firefox", ".mozilla", "firefox"),
+			filepath.Join(home, ".zen"),
 			filepath.Join(home, ".config", "zen"),
+			filepath.Join(home, ".var", "app", "app.zen_browser.zen", ".zen"),
 			filepath.Join(home, ".librewolf"),
 			filepath.Join(home, ".waterfox"),
 			filepath.Join(home, ".floorp"),

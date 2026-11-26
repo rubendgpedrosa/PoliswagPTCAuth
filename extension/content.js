@@ -4,14 +4,33 @@
 const { classifyPage, extractLoginCode } = self.pageLogic;
 
 let credentials = null;
+let credentialsPromise = null;
 let done = false;
+let loginSubmitted = false;
+let consentClicked = false;
 let challengeReported = false;
 let lastReportedState = null;
+let evaluateRunning = false;
+let evaluatePending = false;
 
 function getCredentials() {
-  return new Promise((resolve) => {
-    chrome.runtime.sendMessage({ type: 'need-credentials' }, (resp) => resolve(resp || null));
-  });
+  if (!credentialsPromise) {
+    credentialsPromise = new Promise((resolve) => {
+      try {
+        chrome.runtime.sendMessage({ type: 'need-credentials' }, (resp) => {
+          void chrome.runtime.lastError;
+          if (resp && resp.job !== false && resp.username && resp.password) {
+            resolve({ username: resp.username, password: resp.password });
+          } else {
+            resolve(null);
+          }
+        });
+      } catch {
+        resolve(null);
+      }
+    });
+  }
+  return credentialsPromise;
 }
 
 // React-friendly value setter so the page registers the input.
@@ -69,51 +88,80 @@ function clickConsent() {
 
 async function evaluate() {
   if (done) return;
-  const html = document.documentElement.outerHTML;
-  const visibleText = document.body ? document.body.innerText : '';
-  const state = classifyPage(html, visibleText);
-  if (state !== 'challenge') challengeReported = false;
-
-  // Report each page-state change to the control tab so a stalled/looping login is
-  // visible there (e.g. a job stuck on "unknown" before the server times it out).
-  if (state !== lastReportedState) {
-    lastReportedState = state;
-    try { chrome.runtime.sendMessage({ type: 'state', state }); } catch {}
+  if (evaluateRunning) {
+    evaluatePending = true;
+    return;
   }
-
-  switch (state) {
-    case 'success': {
-      done = true;
-      chrome.runtime.sendMessage({ type: 'result', status: 'SUCCESS', login_code: extractLoginCode(html) });
-      return;
-    }
-    case 'invalid':
-      done = true;
-      chrome.runtime.sendMessage({ type: 'result', status: 'INVALID' });
-      return;
-    case 'banned':
-      done = true;
-      chrome.runtime.sendMessage({ type: 'result', status: 'BANNED' });
-      return;
-    case 'challenge':
-      if (!challengeReported) {
-        challengeReported = true;
-        chrome.runtime.sendMessage({ type: 'challenge' });
+  evaluateRunning = true;
+  try {
+    if (!credentials) {
+      credentials = await getCredentials();
+      if (!credentials) {
+        done = true;
+        observer.disconnect();
+        return;
       }
-      return; // keep observing; the human solves it and the DOM changes
-    case 'login':
-      if (!credentials) credentials = await getCredentials();
-      fillAndSubmitLogin();
-      return;
-    case 'consent':
-      clickConsent();
-      return;
-    default:
-      return; // unknown: wait for the next mutation
+    }
+    if (done) return;
+
+    const html = document.documentElement.outerHTML;
+    const visibleText = document.body ? document.body.innerText : '';
+    const state = classifyPage(html, visibleText);
+    if (state !== 'challenge') challengeReported = false;
+
+    // Report each page-state change to the control tab so a stalled/looping login is
+    // visible there (e.g. a job stuck on "unknown" before the server times it out).
+    if (state !== lastReportedState) {
+      lastReportedState = state;
+      try { chrome.runtime.sendMessage({ type: 'state', state }); } catch {}
+    }
+
+    switch (state) {
+      case 'success': {
+        done = true;
+        observer.disconnect();
+        chrome.runtime.sendMessage({ type: 'result', status: 'SUCCESS', login_code: extractLoginCode(html) });
+        return;
+      }
+      case 'invalid':
+        done = true;
+        observer.disconnect();
+        chrome.runtime.sendMessage({ type: 'result', status: 'INVALID' });
+        return;
+      case 'banned':
+        done = true;
+        observer.disconnect();
+        chrome.runtime.sendMessage({ type: 'result', status: 'BANNED' });
+        return;
+      case 'challenge':
+        if (!challengeReported) {
+          challengeReported = true;
+          chrome.runtime.sendMessage({ type: 'challenge' });
+        }
+        return; // keep observing; the human solves it and the DOM changes
+      case 'login':
+        if (!loginSubmitted && fillAndSubmitLogin()) {
+          loginSubmitted = true;
+        }
+        return;
+      case 'consent':
+        if (!consentClicked && clickConsent()) {
+          consentClicked = true;
+        }
+        return;
+      default:
+        return; // unknown: wait for the next mutation
+    }
+  } finally {
+    evaluateRunning = false;
+    if (evaluatePending && !done) {
+      evaluatePending = false;
+      evaluate();
+    }
   }
 }
 
 // Run now and on DOM changes (covers SPA transitions and post-submit content).
-evaluate();
 const observer = new MutationObserver(() => evaluate());
 observer.observe(document.documentElement, { childList: true, subtree: true });
+evaluate();

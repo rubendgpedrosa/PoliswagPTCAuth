@@ -70,8 +70,11 @@ func (q *JobQueue) Take() *Job {
 		if !ok {
 			continue
 		}
-		if job.timer != nil {
-			job.timer.Stop()
+		// If the queue-wait timer already fired, its Settle(TIMEOUT) is blocked on q.mu
+		// and will settle this job as soon as we unlock. Skip it rather than dispatching
+		// a job that is about to be cancelled (it would open a stray tab).
+		if job.timer != nil && !job.timer.Stop() {
+			continue
 		}
 		job.timer = time.AfterFunc(q.timeout, func() {
 			q.settleJob(id, AuthResult{Status: "TIMEOUT"})
@@ -108,6 +111,14 @@ func (q *JobQueue) Settle(id string, result AuthResult) bool {
 	job.result <- result
 	close(job.result)
 	return true
+}
+
+// Has reports whether the job is still waiting or running (not yet settled).
+func (q *JobQueue) Has(id string) bool {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	_, ok := q.jobs[id]
+	return ok
 }
 
 func (q *JobQueue) Pending() int {

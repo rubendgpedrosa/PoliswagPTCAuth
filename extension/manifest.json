@@ -1,12 +1,12 @@
 {
   "manifest_version": 3,
   "name": "Poliswag Passport",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Performs PTC logins in the real browser for Dragonite via Poliswag Passport.",
   "browser_specific_settings": {
     "gecko": {
       "id": "poliswag-auth-helper@poliswag",
-      "strict_min_version": "115.0",
+      "strict_min_version": "121.0",
       "data_collection_permissions": {
         "required": ["none"]
       }
@@ -19,7 +19,7 @@
     "128": "icons/icon-128.png",
     "256": "icons/icon-256.png"
   },
-  "permissions": ["tabs", "notifications", "webNavigation"],
+  "permissions": ["tabs", "notifications", "webNavigation", "storage"],
   "host_permissions": ["https://access.pokemon.com/*", "https://www.pokemongolive.com/*", "https://127.0.0.1/*", "http://127.0.0.1/*"],
   "background": {
     "service_worker": "background.js",

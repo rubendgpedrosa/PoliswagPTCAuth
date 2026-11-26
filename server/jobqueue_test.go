@@ -59,3 +59,27 @@ func TestJobQueueEmptyUnknownAndLateTimeout(t *testing.T) {
 		t.Fatalf("unexpected result: %+v", got)
 	}
 }
+
+func TestTakeSkipsJobWhoseTimerFired(t *testing.T) {
+	q := NewJobQueue(time.Hour)
+	fired := make(chan struct{})
+	release := make(chan struct{})
+	q.settleJob = func(id string, r AuthResult) bool {
+		close(fired)
+		<-release
+		return q.Settle(id, r)
+	}
+	q.timeout = time.Millisecond
+	_, result := q.Add(JobPayload{Username: "u", Password: "p", URL: "https://x"})
+	<-fired // timer callback is running and has not settled yet
+	q.mu.Lock()
+	q.timeout = time.Hour
+	q.mu.Unlock()
+	if job := q.Take(); job != nil {
+		t.Fatalf("Take returned a job whose timer already fired: %+v", job)
+	}
+	close(release)
+	if got := <-result; got.Status != "TIMEOUT" {
+		t.Fatalf("unexpected result: %+v", got)
+	}
+}

@@ -1,0 +1,33 @@
+# Poliswag Passport helper, to run next to Dragonite.
+#
+# 1. Make a password for your workers:   openssl rand -hex 32
+# 2. Put it in a .env file next to this file:
+#      WORKER_TOKEN=<that value>
+# 3. docker compose up -d
+#
+# Then connect a worker (browser extension or Android app) to
+#   ws://<this-server-ip>:5090/ws   with that WORKER_TOKEN.
+services:
+  poliswag-passport:
+    image: ghcr.io/rubendgpedrosa/poliswagptcauth:latest
+    restart: unless-stopped
+    environment:
+      WORKER_TOKEN: ${WORKER_TOKEN:?set WORKER_TOKEN}
+      # Optional: if set, every login request must carry it in an x-auth-secret
+      # header. Leave empty unless your Dragonite setup sends that header.
+      AUTH_SECRET: ${AUTH_SECRET:-}
+      JOB_TIMEOUT_MS: "600000"
+    volumes:
+      - passport-data:/data
+    # Logins contain PTC passwords: keep this port on a private network (LAN,
+    # Tailscale). For the internet, put an HTTPS reverse proxy in front and let
+    # workers use a wss:// address.
+    ports:
+      - "5090:5090"
+
+# In Dragonite's config, on the same Docker network:
+#   [auth.ptc]
+#   remote_auth_url = "http://poliswag-passport:5090/api/v1/login-code"
+
+volumes:
+  passport-data:

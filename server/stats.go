@@ -17,9 +17,10 @@ type Stats struct {
 }
 
 type StatsStore struct {
-	mu    sync.Mutex
-	path  string
-	stats Stats
+	mu      sync.Mutex
+	writeMu sync.Mutex // serializes file writes so an older snapshot never lands last
+	path    string
+	stats   Stats
 }
 
 func NewStatsStore(path string) *StatsStore {
@@ -64,13 +65,15 @@ func (s *StatsStore) RecordChallenge() {
 func (s *StatsStore) update(fn func(*Stats)) {
 	s.mu.Lock()
 	fn(&s.stats)
-	snapshot := s.stats
 	path := s.path
 	s.mu.Unlock()
 
 	if path == "" {
 		return
 	}
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	snapshot := s.Snapshot() // latest state, taken while holding the write lock
 	_ = os.MkdirAll(filepath.Dir(path), 0o700)
 	tmp := path + ".tmp"
 	data, err := json.MarshalIndent(snapshot, "", "  ")
