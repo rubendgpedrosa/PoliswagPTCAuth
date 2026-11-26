@@ -277,6 +277,15 @@ class WorkerService : Service() {
         acquireWakeLock()
         activeJobStartedAt = System.currentTimeMillis()
         val proxy = prefs.nextProxy()
+        val route = BotCheckCookies.routeOf(proxy)
+        val jars = BotCheckCookies.loadJars(prefs.cookieJars)
+        // A login that never finished (cancelled, app killed) leaves its route's
+        // cookies in an unknown state: drop them.
+        prefs.loginInProgressRoute.takeIf { it.isNotEmpty() }?.let { jars.remove(it) }
+        BotCheckCookies.prune(jars, Proxies.parseList(prefs.proxies).proxies)
+        val restoreCookies = jars[route] ?: emptyList()
+        prefs.cookieJars = BotCheckCookies.dumpJars(jars)
+        prefs.loginInProgressRoute = route
         val via = if (proxy != null) " via proxy ${proxy.label}" else ""
         WorkerState.log("job ${Protocol.shortId(next.id)} for ${next.username} — starting$via")
 
@@ -284,6 +293,7 @@ class WorkerService : Service() {
             context = this,
             job = next,
             proxy = proxy,
+            restoreCookies = restoreCookies,
             onResult = { jobId, status, loginCode, reason, lastState ->
                 handleJobFinished(jobId, next.username, status, loginCode, reason, lastState)
             },
@@ -312,6 +322,7 @@ class WorkerService : Service() {
     ) {
         if (activeRunner?.job?.id != jobId) return
         activeRunner = null
+        saveCookieJarAfterLogin(status)
         dismissChallengeNotification()
         releaseWakeLock()
 
@@ -330,6 +341,30 @@ class WorkerService : Service() {
         WorkerState.log("job ${Protocol.shortId(jobId)} $username -> $status in ${formatElapsed(activeJobStartedAt)}$why")
         updateJobState()
         pumpQueue()
+    }
+
+    /**
+     * Keeps this route's bot-check cookies for its next login if PTC itself answered;
+     * otherwise forgets them, so that route starts as a fresh visitor.
+     */
+    private fun saveCookieJarAfterLogin(status: String) {
+        val route = prefs.loginInProgressRoute
+        prefs.loginInProgressRoute = ""
+        if (route.isEmpty()) return
+        val jars = BotCheckCookies.loadJars(prefs.cookieJars)
+        val cookies = if (BotCheckCookies.reachedPtc(status)) {
+            try {
+                BotCheckCookies.select(
+                    android.webkit.CookieManager.getInstance().getCookie(WebViewJobRunner.ALLOWED_ORIGIN)
+                )
+            } catch (_: Exception) {
+                emptyList()
+            }
+        } else {
+            emptyList()
+        }
+        if (cookies.isEmpty()) jars.remove(route) else jars[route] = cookies
+        prefs.cookieJars = BotCheckCookies.dumpJars(jars)
     }
 
     private fun handleJobChallenge(jobId: String, session: ChallengeSession) {

@@ -34,8 +34,20 @@ If it does not connect, the status says why (wrong token, helper not running,
 wrong address).
 
 > [!WARNING]
-> Logins contain PTC passwords. Use a `ws://` address only on your own network. Over
-> the internet, put the helper behind HTTPS and use a `wss://` address.
+> Logins contain PTC passwords. Use a `ws://` address only on your own network or
+> over a VPN such as Tailscale. Otherwise put the helper behind HTTPS and use a
+> `wss://` address.
+
+## Take the phone with you (Tailscale)
+
+The phone does not have to stay at home. Install [Tailscale](https://tailscale.com)
+on the phone and on the server that runs the helper, sign both in to the same
+account, and use the server's Tailscale address as the helper address, for example
+`ws://100.101.102.103:5090/ws`.
+
+The app then stays connected on mobile data or any Wi-Fi. When PTC shows a captcha
+you get the notification wherever you are and can solve it on the spot. Logins go
+out through the phone's own connection.
 
 ## Good to know
 
@@ -50,9 +62,21 @@ wrong address).
   normal, open browser, which should mean fewer bot checks. Without the permission
   the app still works, with the page fully hidden.
 - **Accounts never mix.** Before each login the app wipes the browser's cookies and
-  saved site data, so one account cannot end up signed in as another. It keeps only
-  the cookies of the site's bot check, so the device is not treated as a brand-new
-  visitor every time.
+  saved site data, so one account cannot end up signed in as another.
+- **The bot check remembers the device.** The app keeps only the cookies of the
+  site's bot check, and keeps a separate set for each proxy (and one for direct
+  logins). To the site, every proxy then looks like its own returning visitor. A set
+  is thrown away when a login through that proxy fails or is cancelled, so a block
+  picked up on one proxy never follows the device to another.
+
+## If logins keep failing
+
+- **The page shows an error instead of the login form** (often "Error 15"): PTC's
+  bot check is blocking the connection the phone is using. Switch the phone to
+  another connection (mobile data usually works) or add proxies below.
+- **Some logins take longer** (around 15 seconds against the usual 5): that is the
+  bot check treating the phone as a new visitor. It happens on the first login
+  through each proxy, and on the one after a failed login.
 
 ## Captchas
 

@@ -33,6 +33,7 @@ class WebViewJobRunner(
     context: Context,
     val job: IncomingMessage.Job,
     private val proxy: ProxyEntry?,
+    private val restoreCookies: List<Pair<String, String>>,
     private val onResult: (jobId: String, status: String, loginCode: String?, reason: String?, lastState: String?) -> Unit,
     private val onChallenge: (jobId: String, session: ChallengeSession) -> Unit,
     private val onStateChange: (jobId: String, state: String) -> Unit
@@ -273,12 +274,12 @@ class WebViewJobRunner(
         mainHandler.postDelayed(timeoutRunnable, LOCAL_TIMEOUT_MS)
 
         // No PTC session may survive from the previous account: wipe all cookies and web
-        // storage. Then put back only the bot check's own cookies (see BotCheckCookies),
-        // so this device is not treated as a first-time visitor on every login.
+        // storage. Then put back only the bot-check cookies saved for this login's route
+        // (see BotCheckCookies), so the site sees a returning visitor.
         val cookieManager = CookieManager.getInstance()
         cookieManager.setAcceptCookie(true)
         cookieManager.setAcceptThirdPartyCookies(wv, true)
-        val kept = BotCheckCookies.select(cookieManager.getCookie(ALLOWED_ORIGIN))
+        val kept = restoreCookies
         WebStorage.getInstance().deleteAllData()
         cookieManager.removeAllCookies {
             for ((name, value) in kept) {
@@ -420,7 +421,7 @@ class WebViewJobRunner(
     }
 
     companion object {
-        private const val ALLOWED_ORIGIN = "https://access.pokemon.com"
+        const val ALLOWED_ORIGIN = "https://access.pokemon.com"
         private const val BRIDGE_NAME = "poliswagBridge"
         private const val LOCAL_TIMEOUT_MS = 10L * 60L * 1000L
     }

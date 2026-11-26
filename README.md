@@ -85,7 +85,7 @@ Keep the control tab open. It should say **connected**.
 
 Firefox and Zen also work, with two limits: the extension is removed every time
 the browser restarts, and they only accept a `wss://` helper address (see
-[Using it over the internet](#using-it-over-the-internet)). To load it there,
+[Using it away from home](#using-it-away-from-home-tailscale)). To load it there,
 open `about:debugging#/runtime/this-firefox`, click **Load Temporary Add-on**
 and pick `manifest.json` in the unzipped `extension` folder.
 
@@ -145,16 +145,59 @@ make sure the extension is allowed to access `access.pokemon.com`.
 **Logins time out.** With no worker connected, a login waits until one connects
 or 10 minutes pass. Check that a worker is connected.
 
-## Using it over the internet
+## Using it away from home (Tailscale)
+
+Workers do not have to be on the same network as the helper. The easy way is a
+private VPN such as [Tailscale](https://tailscale.com) (WireGuard or ZeroTier
+work the same way):
+
+1. Install Tailscale on the server that runs the helper, and on the phone or PC
+   that runs the worker. Sign both in to the same account.
+2. In the worker, use the server's Tailscale address as the helper address, for
+   example `ws://100.101.102.103:5090/ws`. The Tailscale app shows each
+   device's `100.x.y.z` address.
+
+That is all. The worker now connects from anywhere: home Wi-Fi, mobile data, a
+friend's house. Tailscale encrypts the connection, so a plain `ws://` address
+is fine and no port has to be opened to the internet.
+
+This is handy with the Android app: carry the phone with you, and when PTC
+shows a captcha you get a notification and can solve it wherever you are. The
+logins then go out through the phone's own connection (for example mobile
+data), not through your home network.
+
+Firefox and Zen need a `wss://` address for anything except `127.0.0.1`. With
+Tailscale you can get one by running `tailscale serve --bg 5090` on the server
+and using `wss://<server-name>.<your-tailnet>.ts.net/ws`.
 
 > [!WARNING]
 > Logins contain PTC passwords. A `ws://` address sends them unencrypted, so use
-> it only on your own network (home LAN, Tailscale, WireGuard). Never open port
-> `5090` to the internet as it is.
+> it only on your own network or over a VPN like Tailscale. Never open port
+> `5090` to the internet as it is. Without a VPN, put a reverse proxy with HTTPS
+> in front of the helper and use a `wss://` address.
 
-To reach the helper from outside your network, put a reverse proxy with HTTPS in
-front of it and give your workers a `wss://` address, for example
-`wss://passport.example.com/ws`.
+## When PTC blocks your connection
+
+PTC's bot check sometimes blocks a whole internet connection. The login page
+then shows an error (often "Error 15") instead of the login form, and every
+login from that connection fails, whatever worker you use.
+
+- **Android app:** put the phone on another connection (mobile data usually
+  works), or add proxies in the app. See
+  [`android/README.md`](android/README.md#proxies-optional).
+- **Browser extension:** it uses your browser's connection. Use a browser that
+  goes out through a connection PTC accepts.
+
+## What has been tested
+
+With real PTC logins, against a real Dragonite:
+
+- The browser extension in Chrome, connected to the Docker helper.
+- The Android app on a real phone, connected to the Docker helper, with logins
+  going through a proxy. It also reconnected by itself after a reboot.
+
+Not yet seen with a real login: solving a captcha in the Android app, and the
+Android app without a proxy.
 
 ---
 
@@ -197,17 +240,17 @@ Dragonite  ->  helper program on your PC (port 5090)  <-  extension in your brow
 Dragonite must be able to reach this PC on port `5090`. Pick one:
 
 - **Open the port to the Dragonite machine only.** On Linux, if Dragonite is at
-  `192.168.1.253`:
+  `192.168.1.50`:
 
   ```bash
-  sudo ufw allow from 192.168.1.253 to any port 5090 proto tcp
+  sudo ufw allow from 192.168.1.50 to any port 5090 proto tcp
   ```
 
 - **Or use an SSH tunnel, with no firewall change.** Run this on the browser PC,
   then use `http://127.0.0.1:5090/api/v1/login-code` in Dragonite:
 
   ```bash
-  ssh -N -R 127.0.0.1:5090:127.0.0.1:5090 <user>@192.168.1.253
+  ssh -N -R 127.0.0.1:5090:127.0.0.1:5090 <user>@192.168.1.50
   ```
 
 **Firefox/Zen says disconnected although the helper runs.** Stop the helper, run

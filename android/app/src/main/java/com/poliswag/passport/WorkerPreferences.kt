@@ -43,6 +43,23 @@ class WorkerPreferences(context: Context) {
         return list[index % list.size]
     }
 
+    /** Saved bot-check cookies per route, as JSON (see BotCheckCookies.loadJars). */
+    var cookieJars: String
+        get() = prefs.getString(KEY_COOKIE_JARS, "") ?: ""
+        set(value) {
+            prefs.edit().putString(KEY_COOKIE_JARS, value).apply()
+        }
+
+    /**
+     * The route of the login that is running now, or empty. Still set at the next
+     * login means the last one never finished (cancelled, or the app was killed).
+     */
+    var loginInProgressRoute: String
+        get() = prefs.getString(KEY_LOGIN_IN_PROGRESS, "") ?: ""
+        set(value) {
+            prefs.edit().putString(KEY_LOGIN_IN_PROGRESS, value).apply()
+        }
+
     val workerId: String
         get() {
             val existing = prefs.getString(KEY_WORKER_ID, null)
@@ -59,6 +76,8 @@ class WorkerPreferences(context: Context) {
         private const val KEY_WORKER_ID = "worker_id"
         private const val KEY_AUTO_START = "auto_start"
         private const val KEY_PROXIES = "proxies"
+        private const val KEY_COOKIE_JARS = "cookie_jars"
+        private const val KEY_LOGIN_IN_PROGRESS = "login_in_progress_route"
         private const val KEY_PROXY_INDEX = "proxy_index"
         private const val ID_CHARS = "abcdefghijklmnopqrstuvwxyz0123456789"
         private val random = SecureRandom()
