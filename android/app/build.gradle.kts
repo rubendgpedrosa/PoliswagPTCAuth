@@ -55,9 +55,9 @@ android {
         applicationId = "com.poliswag.passport"
         minSdk = 26
         targetSdk = 34
-        versionCode = 2
+        versionCode = 3
         // Release CI passes the git tag (without the leading "v").
-        versionName = System.getenv("POLISWAG_VERSION_NAME")?.takeIf { it.isNotBlank() } ?: "1.1.0"
+        versionName = System.getenv("POLISWAG_VERSION_NAME")?.takeIf { it.isNotBlank() } ?: "1.1.1"
     }
 
     if (hasReleaseSigning) {
