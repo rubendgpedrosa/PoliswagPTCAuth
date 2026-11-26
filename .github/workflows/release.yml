@@ -205,6 +205,9 @@ jobs:
         with:
           path: dist
           merge-multiple: true
+          # buildx leaves its own provenance/cache artifact in the run; it is not a
+          # release file and download-artifact cannot always extract it.
+          pattern: poliswag-passport-*
 
       - name: Create GitHub release
         env:
